@@ -3,10 +3,15 @@ package com.vickllny;
 import org.junit.Test;
 
 import java.io.*;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 public class NioTests {
 
@@ -166,5 +171,89 @@ public class NioTests {
                 System.out.println("拷贝失败");
             }
         }
+    }
+
+    /**
+     * UnderflowException: put不同类型的数据，get时也要保证相同的类型顺序进行获取
+     */
+    @Test
+    public void byteBuffer1(){
+        final ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.putInt(100);
+        buffer.putLong(5000L);
+        buffer.putChar('c');
+        buffer.putShort((short) 5);
+
+        //反转
+        buffer.flip();
+
+        System.out.println(buffer.getInt());
+        System.out.println(buffer.getLong());
+        System.out.println(buffer.getChar());
+        System.out.println(buffer.getShort());
+
+        final ByteBuffer readOnlyBuffer = buffer.asReadOnlyBuffer();
+        readOnlyBuffer.putInt(111);
+    }
+
+
+    /**
+     * MappedByteBuffer 在堆外内存中创建的buffer，可以直接在内存中修改文件，操作系统不需要拷贝
+     * 使用：通过调用channel.map 方法获取mappedByteBuffer
+     */
+    @Test
+    public void mappedByteBufferTest1() throws IOException{
+        try (final RandomAccessFile file = new RandomAccessFile(path, "rw");){
+            /**
+             * 参数1：文件的模式，读写、只读
+             * 参数2：起始位置
+             * 参数3：映射的文件大小
+             */
+            final MappedByteBuffer byteBuffer = file.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, 5);
+            byteBuffer.put(0, (byte) 'H');
+            byteBuffer.put(2, (byte) 'L');
+
+        }catch (IOException e){
+
+        }
+    }
+
+    /**
+     * scattering: 将数据往buffer中写时，可同时往buffer数组写，依次写入（分散）
+     * Gathering：从buffer读取数据时，可以依次读到buffer数组，依次读
+     */
+    @Test
+    public void scatteringAndGathering() throws IOException{
+        try (final ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();){
+
+            final InetSocketAddress address = new InetSocketAddress(7000);
+            serverSocketChannel.socket().bind(address);
+
+            final SocketChannel socketChannel = serverSocketChannel.accept();
+
+            ByteBuffer[] buffers = new ByteBuffer[2];
+            buffers[0] = ByteBuffer.allocate(5);
+            buffers[1] = ByteBuffer.allocate(3);
+
+            while (true){
+                int maxLen = 8, readByte = 0;
+                //读取
+                while (readByte < maxLen){
+                    final long l = socketChannel.read(buffers);
+                    readByte += (int) l;
+                }
+
+                Arrays.stream(buffers).forEach(ByteBuffer::flip);
+                //写回
+                int writeByte = 0;
+                while (writeByte < maxLen){
+                    final long l = socketChannel.write(buffers);
+                    writeByte += (int) l;
+                }
+
+                Arrays.stream(buffers).forEach(ByteBuffer::clear);
+            }
+        }
+
     }
 }
