@@ -4,14 +4,14 @@ import org.junit.Test;
 
 import java.io.*;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
+import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class NioTests {
 
@@ -83,14 +83,11 @@ public class NioTests {
      */
     @Test
     public void fileChannelTest2() throws IOException {
-        try (final FileInputStream is = new FileInputStream(path);
-             final FileOutputStream os = new FileOutputStream(path1)){
+        try (final FileInputStream is = new FileInputStream(path)){
             final FileChannel channel = is.getChannel();
             final ByteBuffer buffer = ByteBuffer.allocate((int) new File(path).length());
 
             final int read = channel.read(buffer);
-            final FileChannel fileOsChannel = os.getChannel();
-            channel.transferTo(0, read, fileOsChannel);
             if(read > 0){
                 System.out.println("读取到的数据：" + new String(buffer.array(), 0 , read));
             }else {
@@ -254,6 +251,82 @@ public class NioTests {
                 Arrays.stream(buffers).forEach(ByteBuffer::clear);
             }
         }
+    }
+
+    /**
+     * Selector
+     * 1.NIO，使用非阻塞的IO方式。可以用一个线程处理多个客户端的连接，就会使用到Selector
+     * 2.多个Channel以事件的方式注册到Selector，Selector能够检测到注册的Channel是否有事件发生，如果有，便获取事件然后针对每个事件进行处理，这样就可以只用一个线程去管理多个通过的连接和请求
+     * 3.只有在通道 连接或者有事件 时才会进行读写，不用一直阻塞等待，也不用为每一个通道建立创建一个线程去处理
+     * 4.单线程的话也避免了线程上下文的切换开销
+     */
+
+    @Test
+    public void selectorServer() throws IOException, InterruptedException {
+        final ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
+        serverSocketChannel.bind(new InetSocketAddress(7000));
+        serverSocketChannel.configureBlocking(false);
+
+
+        final Selector selector = Selector.open();
+
+        serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+
+        while (true){
+            final int selected = selector.select(1000);
+            if(selected == 0){
+                System.out.println("没有事件发生，等待1秒");
+                continue;
+            }
+            final Set<SelectionKey> selectionKeys = selector.selectedKeys();
+            final Iterator<SelectionKey> keyIterator = selectionKeys.iterator();
+            while (keyIterator.hasNext()){
+                final SelectionKey selectKey = keyIterator.next();
+                if(selectKey.isAcceptable()){
+                    final ServerSocketChannel channel = (ServerSocketChannel)selectKey.channel();
+                    final SocketChannel socketChannel = channel.accept();
+                    socketChannel.configureBlocking(false);
+                    //将socketChannel注册到selector、设置操作类型为读、关联一个buffer
+                    socketChannel.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(1024));
+                }else if(selectKey.isReadable()){
+                    final SocketChannel socketChannel = (SocketChannel) selectKey.channel();
+                    final ByteBuffer byteBuffer = (ByteBuffer) selectKey.attachment();
+
+                    int read = socketChannel.read(byteBuffer);
+                    if(read > 0){
+                        System.out.println("客户端的数据：" + new String(byteBuffer.array(), 0, read));
+                    }
+
+                    byteBuffer.clear();
+                }
+                //手动从集合中移除key
+                keyIterator.remove();
+            }
+        }
+    }
+
+    @Test
+    public void selectorClient() throws IOException, InterruptedException {
+        final SocketChannel socketChannel = SocketChannel.open();
+        socketChannel.configureBlocking(false);
+
+        final InetSocketAddress socketAddress = new InetSocketAddress("127.0.0.1", 7000);
+
+        if(!socketChannel.connect(socketAddress)){
+            while (!socketChannel.finishConnect()){
+                System.out.println("等待连接成功，我没有阻塞，可以做其他工作");
+                TimeUnit.MICROSECONDS.sleep(200);
+            }
+        }
+
+        String text = "hello, selector~~";
+        final ByteBuffer buffer = ByteBuffer.wrap(text.getBytes(StandardCharsets.UTF_8));
+
+        //发送数据
+        socketChannel.write(buffer);
+        System.in.read();
 
     }
+
+
 }
