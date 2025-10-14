@@ -46,7 +46,6 @@ public class NIOGroupChatTests {
                     System.out.println(socketChannel.getRemoteAddress().toString() + "  上线");
                 }else if(selectKey.isReadable()){
                     final SocketChannel socketChannel = (SocketChannel) selectKey.channel();
-                    final String clientId = socketChannel.getRemoteAddress().toString();
 
                     final ByteBuffer byteBuffer = (ByteBuffer) selectKey.attachment();
 
@@ -71,6 +70,9 @@ public class NIOGroupChatTests {
                                     }
                                 }
                             }
+                        }else if(read == -1){
+                            selectKey.cancel();
+                            socketChannel.close();
                         }
                     }catch (IOException e){
                         if(e.getMessage().equals("Connection reset by peer")){
