@@ -33,11 +33,18 @@ public class ZeroCopyTests {
 
         final long beginTime = System.currentTimeMillis();
 
-        channel.transferTo(0, channel.size(), socketChannel);
+        //在Linux下单次拷贝文件大小没有限制
+        long copied;
+        channel.transferTo(0, (copied = channel.size()), socketChannel);
+        //在Windows下单次拷贝文件大小最大8M，实现如下
+//        long windowsCopyMaxSize = 8 * 1024 * 1024, copied = 0;
+//        while (copied < channel.size()){
+//            copied += channel.transferTo(copied, Math.min(channel.size() - copied, windowsCopyMaxSize), socketChannel);
+//        }
 
         final long endTime = System.currentTimeMillis();
-
-        System.out.println("文件大小:" + channel.size() + ", 耗时: " + (endTime - beginTime) + "ms");
+        //1261937760
+        System.out.println("文件大小:" + copied + ", 耗时: " + (endTime - beginTime) + "ms");
 
     }
 
