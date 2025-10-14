@@ -344,7 +344,6 @@ public class NioTests {
         //发送数据
         socketChannel.write(buffer);
         System.in.read();
-
     }
 
 
