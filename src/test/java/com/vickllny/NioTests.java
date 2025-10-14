@@ -259,6 +259,17 @@ public class NioTests {
      * 2.多个Channel以事件的方式注册到Selector，Selector能够检测到注册的Channel是否有事件发生，如果有，便获取事件然后针对每个事件进行处理，这样就可以只用一个线程去管理多个通过的连接和请求
      * 3.只有在通道 连接或者有事件 时才会进行读写，不用一直阻塞等待，也不用为每一个通道建立创建一个线程去处理
      * 4.单线程的话也避免了线程上下文的切换开销
+     *
+     * 使用：
+     * 服务端：
+     * 1.创建 ServerSocketChannel，绑定端口，配置非阻塞
+     * 2.创建Selector
+     * 3.将ServerSocketChannel注册到Selector，操作类型为 OP_ACCEPT
+     * 4.开启while循环，selector.select(1000)获取事件的数量
+     * 5.当有事件时遍历所有的SelectionKey，判断是否有 OP_ACCEPT事件，如果有则 ServerSocketChannel.accept 返回一个 SocketChannel
+     * 5.1 将 SocketChannel 设置为非阻塞，然后将 SocketChannel 注册到 Selector，注册时操作参数为 OP_READ、att 为ByteBuffer
+     * 5.2 如果是 OP_READ 事件，则将 selectionKey.channel() 转换为 SocketChanel ，并获取key 绑定的att（buffer），SocketChannel 读取数据到buffer中
+     * 6.最后移除 当前的SelectionKey
      */
 
     @Test
@@ -305,6 +316,14 @@ public class NioTests {
         }
     }
 
+    /**
+     * 客户端使用
+     * 1.创建 SocketChannel，并设置ip和端口（InetSocketAddress），同时设置为非阻塞
+     * 2.使用while循环判断是否连接成功
+     * 3.创建数据 ByteBuffer，然后write写入
+     * @throws IOException
+     * @throws InterruptedException
+     */
     @Test
     public void selectorClient() throws IOException, InterruptedException {
         final SocketChannel socketChannel = SocketChannel.open();
