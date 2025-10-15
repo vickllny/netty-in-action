@@ -75,7 +75,7 @@ public class NettyServer {
         @Override
         public void channelReadComplete(final ChannelHandlerContext ctx) throws Exception {
             //将数据写入到buffer并flush
-            ctx.writeAndFlush(Unpooled.copiedBuffer("hello, 客户端~", StandardCharsets.UTF_8));
+            ctx.writeAndFlush(Unpooled.copiedBuffer("hello, 客户端~喵喵", StandardCharsets.UTF_8));
         }
 
         /**
