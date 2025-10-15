@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Scanner;
 
 @Slf4j
 public class NettyClient {
@@ -35,8 +36,20 @@ public class NettyClient {
                     }).connect("127.0.0.1", NettyServer.PORT).sync();
 
             final Channel channel = channelFuture.channel();
-            // ========== 关键：启动一个线程，读取控制台输入并发送给服务端 ==========
+            // ========== 启动一个线程，读取控制台输入并发送给服务端 ==========
             Thread inputThread = new Thread(() -> {
+
+                try (final Scanner scanner = new Scanner(System.in);){
+                    while (true){
+                        final String line = scanner.nextLine();
+                        if(line == null || line.trim().isEmpty()){
+                            continue;
+                        }
+                        if(line.equals("exit")){
+                            break;
+                        }
+                    }
+                }
                 try {
                     BufferedReader console = new BufferedReader(new InputStreamReader(System.in));
                     String line;

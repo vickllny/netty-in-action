@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class NettyServer {
@@ -30,6 +31,7 @@ public class NettyServer {
 
         //创建服务器端启动的对象，配置启动参数
         final ServerBootstrap bootstrap = new ServerBootstrap();
+
         try {
             //配置并启动
             final ChannelFuture channelFuture = bootstrap.group(bossGroup, workGroup)
@@ -88,10 +90,54 @@ public class NettyServer {
             ByteBuf buf = (ByteBuf) msg;
             log.debug("客户端发送的消息: {}", buf.toString(StandardCharsets.UTF_8));
 
+            /**
+             * 直接提交异步任务
+             * 提交到的是 taskQueue
+             */
+//            ctx.channel().eventLoop().execute(() -> {
+//                try {
+//                    TimeUnit.SECONDS.sleep(10);
+//                    log.debug("第一个任务执行完成");
+//                }catch (Exception e){
+//                    log.error("异常", e);
+//                }
+//            });
+//
+//            ctx.channel().eventLoop().execute(() -> {
+//                try {
+//                    TimeUnit.SECONDS.sleep(20);
+//                    log.debug("第二个任务执行完成");
+//                }catch (Exception e){
+//                    log.error("异常", e);
+//                }
+//            });
+
+            /**
+             * 提交延迟定时任务
+             * 提交到scheduledTaskQueue
+             */
+//            ctx.channel().eventLoop().schedule(() -> {
+//                try {
+//                    log.debug("第1个任务执行完成");
+//                }catch (Exception e){
+//                    log.error("异常", e);
+//                }
+//            }, 5, TimeUnit.SECONDS);
+//
+//            ctx.channel().eventLoop().schedule(() -> {
+//                try {
+//                    log.debug("第2个任务执行完成");
+//                }catch (Exception e){
+//                    log.error("异常", e);
+//                }
+//            }, 10, TimeUnit.SECONDS);
+
             final Channel sender = ctx.channel();
             for (Channel client : clients) {
-                if (client != sender) { // 可选：不发给自己，或者你也可以选择发给自己
-                    client.writeAndFlush(Unpooled.copiedBuffer(buf));
+                if (client != sender) {
+                    //以下2行代码是一样的效果
+//                    client.writeAndFlush(Unpooled.copiedBuffer(buf);
+                    client.eventLoop().execute(() -> client.writeAndFlush(Unpooled.copiedBuffer(buf)));
                 }
             }
         }
