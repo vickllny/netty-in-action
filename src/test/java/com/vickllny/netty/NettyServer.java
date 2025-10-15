@@ -58,6 +58,7 @@ public class NettyServer {
 
     static class NettyServerHandler extends ChannelInboundHandlerAdapter {
 
+
         // 全局 Channel 组（线程安全），用于存放所有连接的客户端
         private static final ChannelGroup clients = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
