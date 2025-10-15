@@ -4,9 +4,12 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
+import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 
@@ -21,9 +24,9 @@ public class NettyServer {
     public void server() throws InterruptedException {
         //创建2个线程组，无限事件循环
         //bossGroup：只处理连接请求
-        final NioEventLoopGroup bossGroup = new NioEventLoopGroup();
+        final NioEventLoopGroup bossGroup = new NioEventLoopGroup(1, new MyThreadFactory("bossNioEventLoop"));
         //workGroup：真正处理业务的线程组，负责读写客户端数据
-        final NioEventLoopGroup workGroup = new NioEventLoopGroup();
+        final NioEventLoopGroup workGroup = new NioEventLoopGroup(1, new MyThreadFactory("workerNioEventLoop"));
 
         //创建服务器端启动的对象，配置启动参数
         final ServerBootstrap bootstrap = new ServerBootstrap();
@@ -51,7 +54,26 @@ public class NettyServer {
 
     }
 
-    class NettyServerHandler extends ChannelInboundHandlerAdapter {
+    static class NettyServerHandler extends ChannelInboundHandlerAdapter {
+
+        // 全局 Channel 组（线程安全），用于存放所有连接的客户端
+        private static final ChannelGroup clients = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
+
+        @Override
+        public void channelActive(final ChannelHandlerContext ctx) throws Exception {
+            Channel client = ctx.channel();
+            // 新客户端连接
+            clients.add(client);
+            log.info("【客户端连接】{} ，当前在线: {}", client.remoteAddress(), clients.size());
+        }
+
+        @Override
+        public void channelInactive(final ChannelHandlerContext ctx) throws Exception {
+            Channel client = ctx.channel();
+            // 新客户端连接
+            clients.remove(client);
+            log.info("【客户端断开连接】{} ，当前在线: {}", client.remoteAddress(), clients.size());
+        }
 
         /**
          * 读取客户端发送的消息
@@ -65,6 +87,13 @@ public class NettyServer {
             //将msg 转为ByteBuf
             ByteBuf buf = (ByteBuf) msg;
             log.debug("客户端发送的消息: {}", buf.toString(StandardCharsets.UTF_8));
+
+            final Channel sender = ctx.channel();
+            for (Channel client : clients) {
+                if (client != sender) { // 可选：不发给自己，或者你也可以选择发给自己
+                    client.writeAndFlush(Unpooled.copiedBuffer(buf));
+                }
+            }
         }
 
         /**
@@ -76,6 +105,7 @@ public class NettyServer {
         public void channelReadComplete(final ChannelHandlerContext ctx) throws Exception {
             //将数据写入到buffer并flush
             ctx.writeAndFlush(Unpooled.copiedBuffer("hello, 客户端~喵喵", StandardCharsets.UTF_8));
+
         }
 
         /**
@@ -87,6 +117,7 @@ public class NettyServer {
         @Override
         public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause) throws Exception {
             log.error("发生异常", cause);
+            clients.remove(ctx.channel());
             ctx.close();
         }
     }

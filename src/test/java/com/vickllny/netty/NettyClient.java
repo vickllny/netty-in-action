@@ -3,15 +3,14 @@ package com.vickllny.netty;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.ChannelInitializer;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
 @Slf4j
@@ -35,7 +34,33 @@ public class NettyClient {
                         }
                     }).connect("127.0.0.1", NettyServer.PORT).sync();
 
-            channelFuture.channel().closeFuture().sync();
+            final Channel channel = channelFuture.channel();
+            // ========== 关键：启动一个线程，读取控制台输入并发送给服务端 ==========
+            Thread inputThread = new Thread(() -> {
+                try {
+                    BufferedReader console = new BufferedReader(new InputStreamReader(System.in));
+                    String line;
+                    while ((line = console.readLine()) != null) {
+                        if ("exit".equalsIgnoreCase(line.trim())) {
+                            System.out.println("【客户端】正在退出...");
+                            channel.close(); // 关闭连接
+                            break;
+                        }
+                        // 发送用户输入的消息到服务端
+                        if (!line.trim().isEmpty()) {
+                            channel.writeAndFlush(Unpooled.copiedBuffer(line.getBytes(StandardCharsets.UTF_8))); // 注意换行，与编解码器匹配
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+
+            inputThread.start();
+
+            channel.closeFuture().sync();
+
+            inputThread.join();
         }finally {
             workGroup.shutdownGracefully();
         }
@@ -64,7 +89,6 @@ public class NettyClient {
         public void channelRead(final ChannelHandlerContext ctx, final Object msg) throws Exception {
             ByteBuf buf = (ByteBuf) msg;
             log.debug("收到服务器[{}]消息: {}", ctx.channel().remoteAddress(), buf.toString(StandardCharsets.UTF_8));
-            log.debug("");
         }
 
         @Override
