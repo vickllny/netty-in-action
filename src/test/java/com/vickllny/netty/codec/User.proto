@@ -1,0 +1,36 @@
+// 命令  protoc --java_out=. User.proto
+syntax = "proto3";
+
+option optimize_for = SPEED;
+option java_outer_classname = "MyDataInfo";
+
+/**
+ * 使用自定义的Message 管理其他的message
+ */
+
+message Message {
+    /**
+     * 定义枚举
+     */
+    enum DataType {
+        UserType = 0;
+        WorkerType = 1;
+    }
+    //标识是哪一个枚举类型
+    DataType data_type = 1;
+    //表示枚举类型只能出现其中的一个，节省空间
+    oneof dataBody {
+        User user = 2;
+        Worker worker = 3;
+    }
+}
+
+message User {
+    int32 id = 1;
+    string name = 2;
+}
+
+message Worker {
+    string name = 1;
+    int32 age = 2;
+}
